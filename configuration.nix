@@ -19,7 +19,7 @@
   boot.loader.systemd-boot.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;
 
-  # LUKS
+  # Dispositivo LUKS
   boot.initrd.luks.devices."luks-6de8cb75-c105-4641-b40d-6184f68e251e".device = "/dev/disk/by-uuid/6de8cb75-c105-4641-b40d-6184f68e251e";
 
   # Melhora de desempenho nos jogos
@@ -28,31 +28,13 @@
   };
 
   # -----------------------------------------------------------
-  # GESTÃO DE DISCOS (MONTAGEM AUTOMÁTICA)
+  # CORREÇÃO: MONTAGEM DO HD (exFAT)
   # -----------------------------------------------------------
-
-  # Meu HD de BACKUPS
   fileSystems."/mnt/backup-hd" = {
     device = "/dev/disk/by-uuid/B489-CA7F";
     fsType = "exfat";
     options = [ "nofail" "x-systemd.automount" "uid=1000" "gid=100" "umask=0022" ];
   };
-
-  # 2. DISCO 1
-  fileSystems."/mnt/extra-1" = {
-    device = "/dev/disk/by-uuid/20D9-DA63";
-    fsType = "exfat"; # Se der erro, troque para "vfat" (FAT32) ou verifique com lsblk -f
-    options = [ "nofail" "x-systemd.automount" "uid=1000" "gid=100" "umask=0022" ];
-  };
-
-  # 3. DISCO 2
-  fileSystems."/mnt/extra-2" = {
-    device = "/dev/disk/by-uuid/44E89DE3E89DD390";
-    fsType = "ntfs";
-    # uid=1000 garante que você é o dono. umask=0022 permite leitura/escrita.
-    options = [ "nofail" "x-systemd.automount" "uid=1000" "gid=100" "umask=0022" ];
-  };
-
 
   # -----------------------------------------------------------
   # 2. DRIVERS E GRÁFICOS NVIDIA
@@ -73,7 +55,19 @@
     NIXOS_OZONE_WL = "1";
     MOZ_ENABLE_WAYLAND = "1";
     __GLX_VENDOR_LIBRARY_NAME = "nvidia";
+
+    # --- C++23 DEV ENVIRONMENT (GLOBAL) ---
+    # Define o Clang mais recente como compilador padrão do sistema
+    CC = "${pkgs.llvmPackages_latest.clang}/bin/clang";
+    CXX = "${pkgs.llvmPackages_latest.clang}/bin/clang++";
+    
+    # CORREÇÃO CRÍTICA PARA MÓDULOS C++:
+    # O Clang no NixOS precisa de ajuda para achar os headers da libstdc++ (GCC).
+    # Isso configura os includes globalmente para o CLion e terminal.
+    CPLUS_INCLUDE_PATH = "${pkgs.gcc-unwrapped}/include/c++/${pkgs.gcc.version}:${pkgs.gcc-unwrapped}/include/c++/${pkgs.gcc.version}/x86_64-unknown-linux-gnu";
   };
+
+  # (Removido o alias do CLion/steam-run pois agora usaremos a versão nativa)
 
   # -----------------------------------------------------------
   # 3. AMBIENTE DE DESKTOP
@@ -114,18 +108,13 @@
     backup-sistema = {
       initialize = true;
       user = "root";
-
-      # Aponta para o ponto de montagem do backup
       repository = "/mnt/backup-hd/nixos";
-
       passwordFile = "/etc/nixos/restic-password";
-
       paths = [
         "/home/luiz"
         "/etc/nixos"
         "/var/backup-mysql"
       ];
-
       exclude = [
         "/home/luiz/Downloads"
         "/home/luiz/.cache"
@@ -134,18 +123,15 @@
         "/home/luiz/**/target"
         ".git"
       ];
-
       backupPrepareCommand = ''
         mkdir -p /var/backup-mysql
         ${pkgs.mariadb}/bin/mysqldump --all-databases --single-transaction --quick --lock-tables=false > /var/backup-mysql/dump_completo.sql
       '';
-
       pruneOpts = [
         "--keep-daily 7"
         "--keep-weekly 4"
         "--keep-monthly 12"
       ];
-
       timerConfig = {
         OnCalendar = "19:00";
         Persistent = true;
@@ -172,8 +158,7 @@
 
     # Ferramentas de Backup e Disco
     restic
-    exfatprogs # Para discos exFAT
-    ntfs3g     # ADICIONADO: Para discos NTFS (melhor compatibilidade)
+    exfatprogs 
 
     # Desenvolvimento e Browsers
     vscode
@@ -181,8 +166,17 @@
     firefox
     nodejs_24
     javaPackages.compiler.openjdk21
+    jetbrains.clion
+
+    # --- C++ TOOLCHAIN MODERNO ---
     cmake
-    gcc
+    ninja
+    gdb
+    
+    # Toolchain LLVM/Clang Completo (Latest)
+    llvmPackages_latest.clang       # Compilador (clang/clang++)
+    llvmPackages_latest.bintools    # Linker (lld) e utilitários
+    llvmPackages_latest.clang-tools # CRÍTICO: Inclui clang-scan-deps (para módulos C++20/23)
 
     # Multimídia
     obs-studio
