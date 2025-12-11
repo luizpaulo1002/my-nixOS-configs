@@ -1,20 +1,21 @@
 { config, pkgs, lib, ... }:
 
 let
-  # Importa o módulo da comunidade para gerenciar Flatpaks declarativamente
-  nix-flatpak = builtins.fetchTarball "https://github.com/gmodena/nix-flatpak/archive/v0.4.1.tar.gz";
+  # Versão v0.6.0 do nix-flatpak
+  nix-flatpak = builtins.fetchTarball "https://github.com/gmodena/nix-flatpak/archive/v0.6.0.tar.gz";
 in
 {
   # -----------------------------------------------------------
-  # 1. BASE SYSTEM AND IMPORTS
+  # 1. SISTEMA BASE E IMPORTS
   # -----------------------------------------------------------
-  imports =
-    [
-      ./hardware-configuration.nix
-      "${nix-flatpak}/modules/nixos" # Módulo necessário para a lista de 'packages' funcionar
-    ];
+  imports = [
+    ./hardware-configuration.nix
+    "${nix-flatpak}/modules/nixos.nix"
+  ];
 
-  # ... (Configurações base) ...
+  # -----------------------------------------------------------
+  # CONFIGURAÇÕES DE SISTEMA
+  # -----------------------------------------------------------
   networking.hostName = "nixos";
   networking.networkmanager.enable = true;
   time.timeZone = "America/Bahia";
@@ -24,7 +25,7 @@ in
   boot.loader.systemd-boot.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;
 
-  # LUKS
+  # LUKS (disco criptografado)
   boot.initrd.luks.devices."luks-6de8cb75-c105-4641-b40d-6184f68e251e".device = "/dev/disk/by-uuid/6de8cb75-c105-4641-b40d-6184f68e251e";
 
   # Melhora de desempenho nos jogos
@@ -32,8 +33,12 @@ in
     "kernel.split_lock_mitigate" = 0;
   };
 
+  # --- CORREÇÃO CONTROLE GAMESIR ---
+  # Carrega o driver xpad (Xbox)
+  boot.kernelModules = [ "xpad" ];
+
   # -----------------------------------------------------------
-  # CORREÇÃO: MONTAGEM DO HD (exFAT)
+  # MONTAGEM DO HD (exFAT)
   # -----------------------------------------------------------
   fileSystems."/mnt/backup-hd" = {
     device = "/dev/disk/by-uuid/B489-CA7F";
@@ -49,7 +54,6 @@ in
 
   boot.extraModulePackages = [ config.boot.kernelPackages.nvidiaPackages.stable ];
 
-  # Força o modesetting (essencial para Wayland)
   boot.initrd.kernelModules = [ "nvidia_modeset" ];
 
   services.xserver.enable = true;
@@ -61,32 +65,34 @@ in
     MOZ_ENABLE_WAYLAND = "1";
     __GLX_VENDOR_LIBRARY_NAME = "nvidia";
 
-    # --- C++23 DEV ENVIRONMENT (GLOBAL) ---
-    # Define o Clang mais recente como compilador padrão do sistema
+    # --- C++23 DEV ENVIRONMENT ---
     CC = "${pkgs.llvmPackages_latest.clang}/bin/clang";
     CXX = "${pkgs.llvmPackages_latest.clang}/bin/clang++";
-
-    # CORREÇÃO CRÍTICA PARA MÓDULOS C++:
     CPLUS_INCLUDE_PATH = "${pkgs.gcc-unwrapped}/include/c++/${pkgs.gcc.version}:${pkgs.gcc-unwrapped}/include/c++/${pkgs.gcc.version}/x86_64-unknown-linux-gnu";
   };
 
   # -----------------------------------------------------------
-  # 3. AMBIENTE DE DESKTOP
+  # 3. AMBIENTE DE DESKTOP E INPUTS
   # -----------------------------------------------------------
-
-  # KWallet
   security.pam.services."login".kwallet.enable = true;
 
-  # Plasma + SDDM
   services.displayManager.sddm.enable = true;
   services.desktopManager.plasma6.enable = true;
 
   services.xserver.xkb = { layout = "br"; variant = ""; };
   console.keyMap = "br-abnt2";
 
+  # --- CORREÇÃO CONTROLE GAMESIR (UDEV) ---
+  hardware.steam-hardware.enable = true;
+  services.udev.packages = [ pkgs.game-devices-udev-rules ];
+
   # -----------------------------------------------------------
-  # 4. ÁUDIO E OUTROS SERVIÇOS
+  # 4. ÁUDIO, SEGURANÇA E OUTROS SERVIÇOS
   # -----------------------------------------------------------
+
+  # Firewall ativado (Padrão NixOS)
+  networking.firewall.enable = true;
+
   services.pulseaudio.enable = false;
   security.rtkit.enable = true;
   services.pipewire = {
@@ -100,14 +106,10 @@ in
   # --- CONFIGURAÇÃO FLATPAK DECLARATIVA ---
   services.flatpak = {
     enable = true;
-
-    # Define o Flathub como fonte remota
     remotes = lib.mkOptionDefault [{
       name = "flathub";
       location = "https://dl.flathub.org/repo/flathub.flatpakrepo";
     }];
-
-    # Lista de Flatpaks a serem instalados/mantidos
     packages = [
       "com.atlauncher.ATLauncher"
       "com.github.Matoking.protontricks"
@@ -120,7 +122,6 @@ in
     ];
   };
 
-  # Banco de Dados
   services.mysql.package = pkgs.mariadb;
   services.mysql.enable = true;
 
@@ -133,11 +134,7 @@ in
       user = "root";
       repository = "/mnt/backup-hd/nixos";
       passwordFile = "/etc/nixos/restic-password";
-      paths = [
-        "/home/luiz"
-        "/etc/nixos"
-        "/var/backup-mysql"
-      ];
+      paths = [ "/home/luiz" "/etc/nixos" "/var/backup-mysql" ];
       exclude = [
         "/home/luiz/Downloads"
         "/home/luiz/.cache"
@@ -150,15 +147,8 @@ in
         mkdir -p /var/backup-mysql
         ${pkgs.mariadb}/bin/mysqldump --all-databases --single-transaction --quick --lock-tables=false > /var/backup-mysql/dump_completo.sql
       '';
-      pruneOpts = [
-        "--keep-daily 7"
-        "--keep-weekly 4"
-        "--keep-monthly 12"
-      ];
-      timerConfig = {
-        OnCalendar = "19:00";
-        Persistent = true;
-      };
+      pruneOpts = [ "--keep-daily 7" "--keep-weekly 4" "--keep-monthly 12" ];
+      timerConfig = { OnCalendar = "19:00"; Persistent = true; };
     };
   };
 
@@ -168,23 +158,23 @@ in
   users.users.luiz = {
     isNormalUser = true;
     description = "Luiz";
-    extraGroups = [ "networkmanager" "wheel" ];
+    extraGroups = [ "networkmanager" "wheel" "input" ];
     packages = with pkgs; [ kdePackages.kate ];
   };
 
   environment.systemPackages = with pkgs; [
-    # Ferramentas de Sistema
+    # Sistema
     flatpak
     appimage-run
     nano
     wget
     git
-
-    # Ferramentas de Backup e Disco
+    protonup-qt
     restic
     exfatprogs
+    firewalld-gui
 
-    # Desenvolvimento e Browsers
+    # Dev / Apps
     vscode
     brave
     firefox
@@ -192,18 +182,16 @@ in
     javaPackages.compiler.openjdk21
     jetbrains.clion
 
-    # --- C++ TOOLCHAIN MODERNO ---
+    # C++ Toolchain
     cmake
     lomiri.cmake-extras
     ninja
     gdb
+    llvmPackages_latest.clang
+    llvmPackages_latest.bintools
+    llvmPackages_latest.clang-tools
 
-    # Toolchain LLVM/Clang Completo (Latest)
-    llvmPackages_latest.clang       # Compilador (clang/clang++)
-    llvmPackages_latest.bintools    # Linker (lld) e utilitários
-    llvmPackages_latest.clang-tools # CRÍTICO: Inclui clang-scan-deps (para módulos C++20/23)
-
-    # Multimídia
+    # Media
     obs-studio
     mpv
   ];
