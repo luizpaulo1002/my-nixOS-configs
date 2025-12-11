@@ -1,46 +1,46 @@
 { pkgs ? import <nixpkgs> {} }:
 
 pkgs.mkShell {
-  # Nome do ambiente (aparece no terminal se configurado)
   name = "cpp23-dev-env";
 
-  # Pacotes que estarão disponíveis dentro deste shell
+  # Ferramentas de compilação e utilitários
   nativeBuildInputs = with pkgs; [
-    # Compilador Clang mais recente (suporte C++23)
+    # Compilador Clang (suporte C++23)
     llvmPackages_latest.clang
     llvmPackages_latest.bintools
-    llvmPackages_latest.lldb # Debugger do LLVM
+    llvmPackages_latest.lldb
 
-    # Ferramentas de Build
+    # Build systems
     cmake
     ninja
     pkg-config
     gnumake
 
-    # Ferramentas Extras
+    # Análise e Debug
     cppcheck
     valgrind
   ];
 
-  # Bibliotecas necessárias
+  # Bibliotecas
   buildInputs = with pkgs; [
-     boost
-     sdl2
-     glfw
+    boost
+    SDL2
+    glfw
   ];
 
-  # Variáveis de ambiente configuradas AUTOMATICAMENTE ao entrar no shell
   shellHook = ''
     echo "================================================"
-    echo "🛠️  Ambiente de Desenvolvimento C++23 Ativado"
+    echo "Ambiente de Desenvolvimento C++23 Ativado"
     echo "   Compilador: Clang $(clang --version | head -n1 | awk '{print $3}')"
     echo "================================================"
 
     # Define Clang como compilador padrão
-    export CC="${pkgs.llvmPackages_latest.clang}/bin/clang"
-    export CXX="${pkgs.llvmPackages_latest.clang}/bin/clang++"
+    export CC="clang"
+    export CXX="clang++"
 
-    # Configura Includes para evitar erros de cabeçalho
-    export CPLUS_INCLUDE_PATH="${pkgs.llvmPackages_latest.libstdcxx}/include/c++/${pkgs.gcc.version}:${pkgs.llvmPackages_latest.libstdcxx}/include/c++/${pkgs.gcc.version}/x86_64-unknown-linux-gnu"
+    # --- CORREÇÃO DOS INCLUDES ---
+    # O Nix geralmente configura isso sozinho através do 'wrapper' do clang.
+    # Mas se precisar forçar os headers do GCC (libstdc++), o caminho correto é este:
+    export CPLUS_INCLUDE_PATH="${pkgs.gcc.cc}/include/c++/${pkgs.gcc.version}:${pkgs.gcc.cc}/include/c++/${pkgs.gcc.version}/x86_64-unknown-linux-gnu"
   '';
 }
