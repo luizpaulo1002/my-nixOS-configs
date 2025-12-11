@@ -20,13 +20,12 @@ in
   i18n.defaultLocale = "pt_BR.UTF-8";
   console.keyMap = "br-abnt2";
 
-
   system.stateVersion = "25.11";
 
   boot.loader.systemd-boot.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;
 
-  # Descriptografia LUKS
+  # LUKS
   boot.initrd.luks.devices."luks-6de8cb75-c105-4641-b40d-6184f68e251e".device = "/dev/disk/by-uuid/6de8cb75-c105-4641-b40d-6184f68e251e";
 
   # Otimizações de Kernel e Jogos
@@ -70,6 +69,13 @@ in
     __GLX_VENDOR_LIBRARY_NAME = "nvidia";
   };
 
+  # --- ALIASES (ATALHOS DE TERMINAL) ---
+  # Isso permite rodar 'cpp' em qualquer pasta para ativar o ambiente C++
+  environment.shellAliases = {
+    cpp = "nix-shell /home/luiz/Configs/cpp-shell.nix";
+    rebuild = "sudo nixos-rebuild switch";
+  };
+
   # Desktop (KDE Plasma 6) e Display Manager
   services.displayManager.sddm.enable = true;
   services.desktopManager.plasma6.enable = true;
@@ -93,7 +99,6 @@ in
   };
 
   # Firewall
-
   # Desabilitado para garantir compatibilidade total com jogos online e não ser necessário configuração manual.
   networking.firewall.enable = false;
 
