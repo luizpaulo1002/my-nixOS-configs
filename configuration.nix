@@ -169,7 +169,6 @@ in
     nano
     wget
     git
-    protonup-qt
     restic
     exfatprogs
     firewalld-gui
