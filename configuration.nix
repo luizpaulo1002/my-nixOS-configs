@@ -70,7 +70,6 @@ in
   };
 
   # --- ALIASES (ATALHOS DE TERMINAL) ---
-  # Isso permite rodar 'cpp' em qualquer pasta para ativar o ambiente C++
   environment.shellAliases = {
     cpp = "nix-shell /home/luiz/Configs/cpp-shell.nix";
     rebuild = "sudo nixos-rebuild switch";
@@ -98,8 +97,11 @@ in
     pulse.enable = true;
   };
 
+  # --- NOISTETORCH ---
+  # Habilita o NoiseTorch
+  programs.noisetorch.enable = true;
+
   # Firewall
-  # Desabilitado para garantir compatibilidade total com jogos online e não ser necessário configuração manual.
   networking.firewall.enable = false;
 
   # Impressão
@@ -133,6 +135,7 @@ in
       "it.mijorus.gearlever"
       "net.davidotek.pupgui2"
       "org.blender.Blender"
+      "org.kde.kdenlive"
     ];
   };
 
@@ -190,7 +193,7 @@ in
     javaPackages.compiler.openjdk21
     jetbrains.clion
 
-    # Ferramentas C++ (Disponíveis globalmente, utilizando o shell.nix para compilar)
+    # Ferramentas C++
     cmake
     ninja
     gdb
