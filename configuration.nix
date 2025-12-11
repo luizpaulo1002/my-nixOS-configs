@@ -1,5 +1,9 @@
-{ config, pkgs, ... }:
+{ config, pkgs, lib, ... }:
 
+let
+  # Importa o módulo da comunidade para gerenciar Flatpaks declarativamente
+  nix-flatpak = builtins.fetchTarball "https://github.com/gmodena/nix-flatpak/archive/v0.4.1.tar.gz";
+in
 {
   # -----------------------------------------------------------
   # 1. BASE SYSTEM AND IMPORTS
@@ -7,6 +11,7 @@
   imports =
     [
       ./hardware-configuration.nix
+      "${nix-flatpak}/modules/nixos" # Módulo necessário para a lista de 'packages' funcionar
     ];
 
   # ... (Configurações base) ...
@@ -19,7 +24,7 @@
   boot.loader.systemd-boot.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;
 
-  # Dispositivo LUKS
+  # LUKS
   boot.initrd.luks.devices."luks-6de8cb75-c105-4641-b40d-6184f68e251e".device = "/dev/disk/by-uuid/6de8cb75-c105-4641-b40d-6184f68e251e";
 
   # Melhora de desempenho nos jogos
@@ -60,14 +65,10 @@
     # Define o Clang mais recente como compilador padrão do sistema
     CC = "${pkgs.llvmPackages_latest.clang}/bin/clang";
     CXX = "${pkgs.llvmPackages_latest.clang}/bin/clang++";
-    
+
     # CORREÇÃO CRÍTICA PARA MÓDULOS C++:
-    # O Clang no NixOS precisa de ajuda para achar os headers da libstdc++ (GCC).
-    # Isso configura os includes globalmente para o CLion e terminal.
     CPLUS_INCLUDE_PATH = "${pkgs.gcc-unwrapped}/include/c++/${pkgs.gcc.version}:${pkgs.gcc-unwrapped}/include/c++/${pkgs.gcc.version}/x86_64-unknown-linux-gnu";
   };
-
-  # (Removido o alias do CLion/steam-run pois agora usaremos a versão nativa)
 
   # -----------------------------------------------------------
   # 3. AMBIENTE DE DESKTOP
@@ -95,7 +96,29 @@
     pulse.enable = true;
   };
   services.printing.enable = true;
-  services.flatpak.enable = true;
+
+  # --- CONFIGURAÇÃO FLATPAK DECLARATIVA ---
+  services.flatpak = {
+    enable = true;
+
+    # Define o Flathub como fonte remota
+    remotes = lib.mkOptionDefault [{
+      name = "flathub";
+      location = "https://dl.flathub.org/repo/flathub.flatpakrepo";
+    }];
+
+    # Lista de Flatpaks a serem instalados/mantidos
+    packages = [
+      "com.atlauncher.ATLauncher"
+      "com.github.Matoking.protontricks"
+      "com.valvesoftware.Steam"
+      "dev.vencord.Vesktop"
+      "io.github.peazip.PeaZip"
+      "it.mijorus.gearlever"
+      "net.davidotek.pupgui2"
+      "org.blender.Blender"
+    ];
+  };
 
   # Banco de Dados
   services.mysql.package = pkgs.mariadb;
@@ -152,13 +175,14 @@
   environment.systemPackages = with pkgs; [
     # Ferramentas de Sistema
     flatpak
+    appimage-run
     nano
     wget
     git
 
     # Ferramentas de Backup e Disco
     restic
-    exfatprogs 
+    exfatprogs
 
     # Desenvolvimento e Browsers
     vscode
@@ -170,9 +194,10 @@
 
     # --- C++ TOOLCHAIN MODERNO ---
     cmake
+    lomiri.cmake-extras
     ninja
     gdb
-    
+
     # Toolchain LLVM/Clang Completo (Latest)
     llvmPackages_latest.clang       # Compilador (clang/clang++)
     llvmPackages_latest.bintools    # Linker (lld) e utilitários
